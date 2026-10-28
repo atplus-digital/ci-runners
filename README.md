@@ -8,7 +8,8 @@ As imagens contêm ferramentas públicas; os projetos permanecem em seus reposit
 - `ghcr.io/atplus-digital/ci-runner`: runner oficial, Node 22, Python 3.12,
   Bun 1.4.0, compilador, bibliotecas Electron, ffmpeg, PowerShell, gh e Compose.
   Node/Python também ficam no tool cache das actions oficiais.
-- `ghcr.io/atplus-digital/ci-browser`: acrescenta Playwright 1.62.1 e Chromium.
+- `ghcr.io/atplus-digital/ci-browser`: acrescenta Chromium para Playwright 1.62.1
+  (portal) e 1.61.1 (Vision), com smoke de launch das duas versões.
 - `ghcr.io/atplus-digital/ci-linux-tools`: Ubuntu 24.04 com compilador,
   Chrome e bubblewrap 0.11.0 para os containers isolados do ATP Work.
 
