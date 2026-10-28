@@ -71,5 +71,6 @@ Uma segunda execução no mesmo runner verifica o cache aquecido.
 
 A integração da Ubicloud na org oferece Ubuntu x64/ARM64; o catálogo atual
 não inclui Windows ou macOS. A conta está com Premium e cache transparente
-habilitados. A tarifa observada para 2 vCPUs Premium é US$0,002/min, com teto
-de US$0,01 por execução desse piloto. O teste não publica nem faz deploy de apps.
+habilitados. A tarifa observada para 2 vCPUs Premium é US$0,002/min; cinco
+minutos de execução equivalem a US$0,01. O valor faturado segue a granularidade
+do provedor. O teste não publica nem faz deploy de apps.
