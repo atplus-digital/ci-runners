@@ -59,3 +59,17 @@ Rollback: reaplicar o digest anterior validado e o orçamento anterior através
 da configuração, conservando os jobs em andamento. Acompanhar fila, duração,
 CPU, memória, disco e falhas de startup. Caches dos projetos são separados por
 repositório, plataforma, toolchain e entradas; estado do executor não é compartilhado.
+
+## Piloto de provedor
+
+O workflow manual `Runner pilot` executa o mesmo teste público em
+`ubicloud-standard-2` ou `atplus-k8s`, com timeout de cinco minutos e permissão
+somente de leitura do código. Mede PBKDF2 com Node 22, escrita com fsync de
+128 MiB, download público, Docker/seccomp/AppArmor e restauração de cache.
+As métricas ficam no resumo do job; fila e duração vêm do GitHub Actions.
+Uma segunda execução no mesmo runner verifica o cache aquecido.
+
+A integração da Ubicloud na org oferece Ubuntu x64/ARM64; o catálogo atual
+não inclui Windows ou macOS. A conta está com Premium e cache transparente
+habilitados. A tarifa observada para 2 vCPUs Premium é US$0,002/min, com teto
+de US$0,01 por execução desse piloto. O teste não publica nem faz deploy de apps.
