@@ -82,7 +82,7 @@ def helm_values(live, config, image):
     pod = template["spec"]
     if pod.get("serviceAccountName") == config["name"] + "-gha-rs-no-permission":
         del pod["serviceAccountName"]
-    allowed_env = {"DOCKER_HOST", "DOCKER_TLS_CERTDIR", "DOCKER_GROUP_GID"}
+    allowed_env = {"DOCKER_HOST", "DOCKER_TLS_CERTDIR", "DOCKER_GROUP_GID", "RUNNER_WAIT_FOR_DOCKER_IN_SECONDS"}
     for container in pod["containers"] + pod.get("initContainers", []):
         for env in container.get("env", []):
             if "value" in env and env["name"] not in allowed_env:

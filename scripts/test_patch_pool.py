@@ -34,13 +34,17 @@ class PoolPlanTests(unittest.TestCase):
 
     def test_helm_customizes_docker_without_duplicate_generated_sidecars(self):
         pod = self.live["spec"]["template"]["spec"]
-        pod["containers"][0]["env"] = [{"name": "DOCKER_HOST", "value": "unix:///var/run/docker.sock"}]
+        pod["containers"][0]["env"] = [
+            {"name": "DOCKER_HOST", "value": "unix:///var/run/docker.sock"},
+            {"name": "RUNNER_WAIT_FOR_DOCKER_IN_SECONDS", "value": "120"},
+        ]
         pod["serviceAccountName"] = "atplus-k8s-gha-rs-no-permission"
         values = helm_values(self.live, self.config, self.image)
         self.assertEqual(values["containerMode"], {"type": ""})
         self.assertNotIn("serviceAccountName", values["template"]["spec"])
         self.assertNotIn("githubConfigSecret", values)
         self.assertEqual(values["template"]["spec"]["containers"][0]["image"], self.image)
+        self.assertEqual(values["template"]["spec"]["containers"][0]["env"], pod["containers"][0]["env"])
         self.assertEqual(values["template"]["spec"]["initContainers"][1]["resources"], self.config["dockerResources"])
         pod["containers"][0]["env"].append({"name": "SENSITIVE_CONFIGURATION", "value": "sentinel"})
         with self.assertRaises(ValueError):
