@@ -1,0 +1,6 @@
+{
+  "sourceCommit": "abab287f1070437029c056fa1b2cf871e06300ee",
+  "runner": "ghcr.io/atplus-digital/ci-runner@sha256:30410f464f72dbd279ca976605d2aa89157f292969a58cab6ccca182215219d2",
+  "browser": "ghcr.io/atplus-digital/ci-browser@sha256:457794f765a3f8bb62b46296676458e8806641e6ba7bef1689efffa68e9f6837",
+  "linuxTools": "ghcr.io/atplus-digital/ci-linux-tools@sha256:bc09dde7e91f9260c0e8e743da140c9c8b153cab6a96d59f98e62c5c39b7c8fd"
+}

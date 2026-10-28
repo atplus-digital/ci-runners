@@ -31,10 +31,20 @@ Após comprovar que o cluster consegue puxar o digest publicado, executar
 Acrescentar `--dry-run` para revisar o patch. Validar com
 `python3 -m unittest discover -s scripts -p 'test_*.py'`.
 
-O patch preserva autenticação, volumes e campos alheios, e usa resourceVersion
-para recusar atualização concorrente. O kubeconfig nunca é copiado para o repo.
+O comando persiste o template com `helm upgrade --reuse-values`, conservando
+as referências de autenticação e os volumes. Customiza o modo DIND explicitamente
+para aplicar recursos ao sidecar sem duplicar containers. O kubeconfig nunca é
+copiado para o repo. O JSON patch com teste de resourceVersion fica disponível
+para revisão (`--dry-run`) ou emergência (`--patch-only`).
 Mudanças no listener podem aguardar os jobs atuais terminarem; não apague runners
 ocupados para acelerar a troca.
+
+No ARC 0.14.2 com estratégia `eventual`, uma mudança somente de capacidade pode
+deixar o listener ausente e o conjunto antigo repondo ociosos. Ajustar o conjunto
+antigo para `spec.replicas=0, spec.patchID=0` usa o mecanismo do ARC que conserva
+jobs ocupados. A estratégia `immediate` também pode ser usada temporariamente
+quando o template do runner não mudou, voltando a `eventual` após o listener
+recriado. A estratégia do controlador não pertence a esta release do pool.
 
 Rollback: reaplicar o digest anterior validado e o orçamento anterior através
 da configuração, conservando os jobs em andamento. Acompanhar fila, duração,
