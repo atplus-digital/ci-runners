@@ -26,6 +26,15 @@ requests/limits de runner e Docker-in-Docker e distribuição por worker.
 Há cinco workers de 8 vCPU/16 GiB. O teto parte de uma medição curta e precisa
 ser acompanhado durante picos reais.
 
+`dockerNetworkMtu=1480` alinha a bridge padrão do Docker e as redes criadas por
+Compose/actions à interface dos pods. As VPS usam MTU 1500 e o Calico IP-in-IP
+reserva 20 bytes para o encapsulamento. Não altere o MTU global do Calico sem
+medir o caminho físico. Os parâmetros Docker são `--mtu` e
+`--default-network-opt=bridge=com.docker.network.driver.mtu=1480`:
+o primeiro sozinho não cobre redes bridge criadas pelos jobs.
+[Calico](https://docs.tigera.io/calico/latest/networking/configuring/mtu) e
+[Docker](https://docs.docker.com/reference/cli/dockerd/#default-network-options).
+
 Após comprovar que o cluster consegue puxar o digest publicado, executar
 `python3 scripts/patch_pool.py --kubeconfig <arquivo-local> --image <ci-browser por digest>`.
 Acrescentar `--dry-run` para revisar o patch. Validar com

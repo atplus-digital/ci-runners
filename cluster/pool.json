@@ -3,6 +3,7 @@
   "name": "atplus-k8s",
   "minRunners": 2,
   "maxRunners": 24,
+  "dockerNetworkMtu": 1480,
   "runnerResources": {
     "requests": {"cpu": "1", "memory": "1Gi"},
     "limits": {"cpu": "3", "memory": "6Gi"}
