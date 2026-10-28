@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Atualiza somente capacidade, recursos e imagens do pool ARC existente."""
 import argparse
+import copy
 import json
 from pathlib import Path
 import re
@@ -46,6 +47,8 @@ def main():
     parser.add_argument("--kubeconfig", required=True)
     parser.add_argument("--image", required=True)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--helm", default="helm", help="Executável Helm usado para persistir a configuração da release")
+    parser.add_argument("--patch-only", action="store_true", help="Emergência: altera somente o objeto Kubernetes")
     args = parser.parse_args()
     config = json.loads((Path(__file__).parent.parent / "cluster/pool.json").read_text())
     kubectl = ["kubectl", "--kubeconfig", args.kubeconfig, "--request-timeout=30s", "-n", config["namespace"]]
@@ -53,8 +56,39 @@ def main():
     patch = plan(live, config, args.image)
     if args.dry_run:
         print(json.dumps(patch, indent=2))
-    else:
+    elif args.patch_only:
         subprocess.run(kubectl + ["patch", "autoscalingrunnerset", config["name"], "--type=json", "--patch", json.dumps(patch)], check=True)
+    else:
+        values = helm_values(live, config, args.image)
+        subprocess.run([args.helm, "upgrade", config["name"],
+                        "oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set",
+                        "--version", "0.14.2", "--kubeconfig", args.kubeconfig,
+                        "--namespace", config["namespace"], "--reuse-values", "--values", "-", "--hide-notes"],
+                       input=json.dumps(values), text=True, check=True)
+
+
+def helm_values(live, config, image):
+    """Conserva o template existente sem ler Secrets; as credenciais são referências."""
+    template = copy.deepcopy(live["spec"]["template"])
+    for op in plan(live, config, image):
+        prefix = "/spec/template/"
+        if not op["path"].startswith(prefix):
+            continue
+        keys = op["path"][len(prefix):].split("/")
+        target = template
+        for key in keys[:-1]:
+            target = target[int(key)] if isinstance(target, list) else target[key]
+        target[keys[-1]] = copy.deepcopy(op["value"])
+    pod = template["spec"]
+    if pod.get("serviceAccountName") == config["name"] + "-gha-rs-no-permission":
+        del pod["serviceAccountName"]
+    allowed_env = {"DOCKER_HOST", "DOCKER_TLS_CERTDIR", "DOCKER_GROUP_GID"}
+    for container in pod["containers"] + pod.get("initContainers", []):
+        for env in container.get("env", []):
+            if "value" in env and env["name"] not in allowed_env:
+                raise ValueError("Variável literal fora da lista pública; revise o template antes de persistir")
+    return {"minRunners": config["minRunners"], "maxRunners": config["maxRunners"],
+            "containerMode": {"type": ""}, "template": template}
 
 
 if __name__ == "__main__":

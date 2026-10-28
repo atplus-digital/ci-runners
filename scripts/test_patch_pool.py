@@ -2,7 +2,7 @@ import copy
 import json
 from pathlib import Path
 import unittest
-from patch_pool import plan
+from patch_pool import helm_values, plan
 
 
 class PoolPlanTests(unittest.TestCase):
@@ -31,6 +31,20 @@ class PoolPlanTests(unittest.TestCase):
         self.config["maxRunners"] = 25
         with self.assertRaises(ValueError):
             plan(self.live, self.config, self.image)
+
+    def test_helm_customizes_docker_without_duplicate_generated_sidecars(self):
+        pod = self.live["spec"]["template"]["spec"]
+        pod["containers"][0]["env"] = [{"name": "DOCKER_HOST", "value": "unix:///var/run/docker.sock"}]
+        pod["serviceAccountName"] = "atplus-k8s-gha-rs-no-permission"
+        values = helm_values(self.live, self.config, self.image)
+        self.assertEqual(values["containerMode"], {"type": ""})
+        self.assertNotIn("serviceAccountName", values["template"]["spec"])
+        self.assertNotIn("githubConfigSecret", values)
+        self.assertEqual(values["template"]["spec"]["containers"][0]["image"], self.image)
+        self.assertEqual(values["template"]["spec"]["initContainers"][1]["resources"], self.config["dockerResources"])
+        pod["containers"][0]["env"].append({"name": "SENSITIVE_CONFIGURATION", "value": "sentinel"})
+        with self.assertRaises(ValueError):
+            helm_values(self.live, self.config, self.image)
         self.config["maxRunners"] = 24
         self.live["metadata"]["namespace"] = "another-namespace"
         with self.assertRaises(ValueError):

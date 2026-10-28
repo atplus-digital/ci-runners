@@ -1,7 +1,6 @@
 name: CI images
 on:
   pull_request:
-    paths: ['images/**', 'scripts/smoke-runner.sh', '.github/workflows/images.yml']
   push:
     branches: [main]
     paths: ['images/**', 'scripts/smoke-runner.sh', '.github/workflows/images.yml']
@@ -44,16 +43,37 @@ jobs:
           IMAGE: ghcr.io/atplus-digital/ci-runner:sha-${{ github.sha }}
         run: docker run --rm --entrypoint bash -v "$PWD/scripts/smoke-runner.sh:/tmp/smoke.sh:ro" "$IMAGE" /tmp/smoke.sh
       - name: Publicar runner validado
+        id: published
         if: github.ref == 'refs/heads/main'
         env:
           IMAGE: ghcr.io/atplus-digital/ci-runner:sha-${{ github.sha }}
-        run: docker push "$IMAGE"
+        run: |
+          docker push "$IMAGE"
+          digest="$(docker buildx imagetools inspect "$IMAGE" | awk '/^Digest:/ {print $2; exit}')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'image=%s@%s\n' "${IMAGE%%:*}" "$digest" >> "$GITHUB_OUTPUT"
+          printf '%s@%s\n' "${IMAGE%%:*}" "$digest" >> "$GITHUB_STEP_SUMMARY"
       - name: Preparar base local para navegador
+        if: github.ref != 'refs/heads/main'
         env:
           IMAGE: ghcr.io/atplus-digital/ci-runner:sha-${{ github.sha }}
         run: |
           docker tag "$IMAGE" ci-runner-base:local
           docker build --builder default -f images/browser.Dockerfile --build-arg RUNNER_IMAGE=ci-runner-base:local -t "ghcr.io/atplus-digital/ci-browser:sha-$GITHUB_SHA" .
+      - name: Construir navegador com cache externo
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: images/browser.Dockerfile
+          load: true
+          tags: ghcr.io/atplus-digital/ci-browser:sha-${{ github.sha }}
+          build-args: RUNNER_IMAGE=${{ steps.published.outputs.image }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=registry,ref=ghcr.io/atplus-digital/ci-browser:buildcache
+          cache-to: type=registry,ref=ghcr.io/atplus-digital/ci-browser:buildcache,mode=max
       - name: Provar Chromium e a toolchain herdada
         env:
           IMAGE: ghcr.io/atplus-digital/ci-browser:sha-${{ github.sha }}
@@ -69,7 +89,9 @@ jobs:
         run: |
           docker push "$BROWSER"
           for image in "$RUNNER" "$BROWSER"; do
-            docker image inspect "$image" --format '{{json .RepoDigests}}' >> "$GITHUB_STEP_SUMMARY"
+            digest="$(docker buildx imagetools inspect "$image" | awk '/^Digest:/ {print $2; exit}')"
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            printf '%s@%s\n' "${image%%:*}" "$digest" >> "$GITHUB_STEP_SUMMARY"
           done
   linux-tools:
     runs-on: ubuntu-24.04
@@ -108,4 +130,6 @@ jobs:
           IMAGE: ghcr.io/atplus-digital/ci-linux-tools:sha-${{ github.sha }}
         run: |
           docker push "$IMAGE"
-          docker image inspect "$IMAGE" --format '{{json .RepoDigests}}' >> "$GITHUB_STEP_SUMMARY"
+          digest="$(docker buildx imagetools inspect "$IMAGE" | awk '/^Digest:/ {print $2; exit}')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf '%s@%s\n' "${IMAGE%%:*}" "$digest" >> "$GITHUB_STEP_SUMMARY"
