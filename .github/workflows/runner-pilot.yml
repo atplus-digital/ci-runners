@@ -1,0 +1,39 @@
+name: Runner pilot
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner para o teste limitado a cinco minutos
+        type: choice
+        default: ubicloud-standard-2
+        options:
+          - ubicloud-standard-2
+          - atplus-k8s
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-pilot-${{ inputs.runner }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/cache@v4
+        id: cache
+        with:
+          path: ${{ runner.temp }}/runner-pilot-cache
+          key: runner-pilot-v1-${{ inputs.runner }}-${{ runner.os }}-${{ runner.arch }}-node22
+      - name: Medir ferramentas, CPU, disco e rede
+        env:
+          PILOT_RUNNER: ${{ inputs.runner }}
+          PILOT_CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+        run: bash scripts/runner-pilot.sh
