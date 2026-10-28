@@ -1,0 +1,111 @@
+name: CI images
+on:
+  pull_request:
+    paths: ['images/**', 'scripts/smoke-runner.sh', '.github/workflows/images.yml']
+  push:
+    branches: [main]
+    paths: ['images/**', 'scripts/smoke-runner.sh', '.github/workflows/images.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-images-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  runner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: images/runner.Dockerfile
+          load: true
+          tags: ghcr.io/atplus-digital/ci-runner:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=registry,ref=ghcr.io/atplus-digital/ci-runner:buildcache
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=registry,ref=ghcr.io/atplus-digital/ci-runner:buildcache,mode=max' || '' }}
+      - name: Provar ferramentas como usuário runner
+        env:
+          IMAGE: ghcr.io/atplus-digital/ci-runner:sha-${{ github.sha }}
+        run: docker run --rm --entrypoint bash -v "$PWD/scripts/smoke-runner.sh:/tmp/smoke.sh:ro" "$IMAGE" /tmp/smoke.sh
+      - name: Publicar runner validado
+        if: github.ref == 'refs/heads/main'
+        env:
+          IMAGE: ghcr.io/atplus-digital/ci-runner:sha-${{ github.sha }}
+        run: docker push "$IMAGE"
+      - name: Preparar base local para navegador
+        env:
+          IMAGE: ghcr.io/atplus-digital/ci-runner:sha-${{ github.sha }}
+        run: |
+          docker tag "$IMAGE" ci-runner-base:local
+          docker build --builder default -f images/browser.Dockerfile --build-arg RUNNER_IMAGE=ci-runner-base:local -t "ghcr.io/atplus-digital/ci-browser:sha-$GITHUB_SHA" .
+      - name: Provar Chromium e a toolchain herdada
+        env:
+          IMAGE: ghcr.io/atplus-digital/ci-browser:sha-${{ github.sha }}
+        run: |
+          docker run --rm --entrypoint bash -v "$PWD/scripts/smoke-runner.sh:/tmp/smoke.sh:ro" "$IMAGE" /tmp/smoke.sh
+          docker run --rm --entrypoint bash "$IMAGE" -ec 'cd /opt/ci-browser; node -e '\''require("playwright").chromium.launch({headless:true}).then(async b=>{await b.close()})'\'''
+          docker run --rm --entrypoint bash "$IMAGE" -ec 'cd /opt/ci-browser/versions/1.61.1; node -e '\''require("playwright").chromium.launch({headless:true}).then(async b=>{await b.close()})'\'''
+      - name: Publicar navegador validado e registrar digests
+        if: github.ref == 'refs/heads/main'
+        env:
+          RUNNER: ghcr.io/atplus-digital/ci-runner:sha-${{ github.sha }}
+          BROWSER: ghcr.io/atplus-digital/ci-browser:sha-${{ github.sha }}
+        run: |
+          docker push "$BROWSER"
+          for image in "$RUNNER" "$BROWSER"; do
+            docker image inspect "$image" --format '{{json .RepoDigests}}' >> "$GITHUB_STEP_SUMMARY"
+          done
+  linux-tools:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: images/linux-tools.Dockerfile
+          load: true
+          tags: ghcr.io/atplus-digital/ci-linux-tools:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=registry,ref=ghcr.io/atplus-digital/ci-linux-tools:buildcache
+          cache-to: ${{ github.ref == 'refs/heads/main' && 'type=registry,ref=ghcr.io/atplus-digital/ci-linux-tools:buildcache,mode=max' || '' }}
+      - name: Provar compilador, bubblewrap e Chrome
+        env:
+          IMAGE: ghcr.io/atplus-digital/ci-linux-tools:sha-${{ github.sha }}
+        run: |
+          docker run --rm --user 1001:1001 --cap-drop ALL --security-opt no-new-privileges --entrypoint bash "$IMAGE" -ec 'test "$(bwrap --version)" = "bubblewrap 0.11.0"; gcc --version; google-chrome --version; command -v xvfb-run meson ninja'
+      - name: Publicar ferramentas validadas
+        if: github.ref == 'refs/heads/main'
+        env:
+          IMAGE: ghcr.io/atplus-digital/ci-linux-tools:sha-${{ github.sha }}
+        run: |
+          docker push "$IMAGE"
+          docker image inspect "$IMAGE" --format '{{json .RepoDigests}}' >> "$GITHUB_STEP_SUMMARY"
