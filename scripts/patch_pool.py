@@ -8,6 +8,27 @@ import re
 import subprocess
 
 
+def docker_network_args(args, mtu):
+    if not isinstance(mtu, int) or not 1280 <= mtu <= 1480:
+        raise ValueError("MTU Docker fora do intervalo validado para os pods Calico")
+    result, index = [], 0
+    option = "bridge=com.docker.network.driver.mtu="
+    while index < len(args):
+        value = args[index]
+        if value == "--mtu":
+            index += 2
+            continue
+        if value.startswith("--mtu=") or value.startswith("--default-network-opt=" + option):
+            index += 1
+            continue
+        if value == "--default-network-opt" and index + 1 < len(args) and args[index + 1].startswith(option):
+            index += 2
+            continue
+        result.append(value)
+        index += 1
+    return result + [f"--mtu={mtu}", f"--default-network-opt={option}{mtu}"]
+
+
 def plan(live, config, image):
     if not re.fullmatch(r"ghcr\.io/atplus-digital/ci-browser@sha256:[0-9a-f]{64}", image):
         raise ValueError("A imagem precisa ser ci-browser por digest imutável")
@@ -23,6 +44,8 @@ def plan(live, config, image):
     patch = [{"op": "test", "path": "/metadata/resourceVersion", "value": live["metadata"]["resourceVersion"]}]
     for field in ("minRunners", "maxRunners"):
         patch.append({"op": "add", "path": f"/spec/{field}", "value": config[field]})
+    patch.append({"op": "add", "path": f"/spec/template/spec/initContainers/{docker}/args",
+                  "value": docker_network_args(init[docker].get("args", []), config["dockerNetworkMtu"])})
     for path in (f"containers/{runner}", f"initContainers/{externals}"):
         patch.append({"op": "add", "path": f"/spec/template/spec/{path}/image", "value": image})
         patch.append({"op": "add", "path": f"/spec/template/spec/{path}/imagePullPolicy", "value": "IfNotPresent"})
