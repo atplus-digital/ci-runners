@@ -24,6 +24,7 @@ COPY --from=docker /usr/local/libexec/docker/cli-plugins/ /usr/local/lib/docker/
 ENV PATH=/opt/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV RUNNER_TOOL_CACHE=/opt/hostedtoolcache
 RUN ldconfig \
+    && ln -s /usr/local/bin/bun /usr/local/bin/bunx \
     && node_version="$(node -p process.versions.node)" \
     && python_version="$(python3 -c 'import platform; print(platform.python_version())')" \
     && mkdir -p "$RUNNER_TOOL_CACHE/node/$node_version" "$RUNNER_TOOL_CACHE/Python/$python_version" \

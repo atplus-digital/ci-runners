@@ -6,6 +6,7 @@ python3 -c 'import sys, ssl, sqlite3, bz2, lzma, ctypes; assert sys.version_info
 python3 -m venv /tmp/ci-python-smoke
 /tmp/ci-python-smoke/bin/python -m pip --version
 test "$(bun --version)" = 1.4.0
+command -v bunx
 gh --version
 pwsh -NoLogo -NoProfile -Command 'if ($PSVersionTable.PSVersion.Major -ne 7) { exit 1 }'
 ffmpeg -version >/dev/null
