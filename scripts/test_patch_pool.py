@@ -1,0 +1,41 @@
+import copy
+import json
+from pathlib import Path
+import unittest
+from patch_pool import plan
+
+
+class PoolPlanTests(unittest.TestCase):
+    def setUp(self):
+        self.config = json.loads((Path(__file__).parent.parent / "cluster/pool.json").read_text())
+        self.live = {"metadata": {"name": "atplus-k8s", "namespace": "arc-runners", "resourceVersion": "123"},
+                     "spec": {"template": {"spec": {"containers": [{"name": "runner", "env": [{"name": "KEEP", "value": "keep"}],
+                         "resources": {"requests": {"ephemeral-storage": "1Gi"}}}], "initContainers": [{"name": "init-dind-externals"}, {"name": "dind"}],
+                         "volumes": [{"name": "work", "emptyDir": {}}]}}}}
+        self.image = "ghcr.io/atplus-digital/ci-browser@sha256:" + "a" * 64
+
+    def test_patch_preserves_auth_volumes_and_unrelated_resources(self):
+        original = copy.deepcopy(self.live)
+        patch = plan(self.live, self.config, self.image)
+        self.assertEqual(self.live, original)
+        self.assertEqual(patch[0], {"op": "test", "path": "/metadata/resourceVersion", "value": "123"})
+        paths = [op["path"] for op in patch]
+        self.assertFalse(any("env" in p or "volumes" in p or "githubConfigSecret" in p for p in paths))
+        resources = next(op["value"] for op in patch if op["path"] == "/spec/template/spec/containers/0/resources")
+        self.assertEqual(resources["requests"]["ephemeral-storage"], "1Gi")
+        self.assertEqual(resources["requests"]["cpu"], "1")
+
+    def test_rejects_mutable_images_wrong_pool_and_capacity_growth(self):
+        with self.assertRaises(ValueError):
+            plan(self.live, self.config, "ghcr.io/atplus-digital/ci-browser:main")
+        self.config["maxRunners"] = 25
+        with self.assertRaises(ValueError):
+            plan(self.live, self.config, self.image)
+        self.config["maxRunners"] = 24
+        self.live["metadata"]["namespace"] = "another-namespace"
+        with self.assertRaises(ValueError):
+            plan(self.live, self.config, self.image)
+
+
+if __name__ == "__main__":
+    unittest.main()

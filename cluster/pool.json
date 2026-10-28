@@ -1,0 +1,14 @@
+{
+  "namespace": "arc-runners",
+  "name": "atplus-k8s",
+  "minRunners": 2,
+  "maxRunners": 24,
+  "runnerResources": {
+    "requests": {"cpu": "1", "memory": "1Gi"},
+    "limits": {"cpu": "3", "memory": "6Gi"}
+  },
+  "dockerResources": {
+    "requests": {"cpu": "500m", "memory": "512Mi"},
+    "limits": {"cpu": "4", "memory": "6Gi"}
+  }
+}
